@@ -1,0 +1,13 @@
+.page {
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.note {
+  color: #6b7280;
+}

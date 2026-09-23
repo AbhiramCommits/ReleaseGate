@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: releasegate
+      POSTGRES_PASSWORD: releasegate
+      POSTGRES_DB: releasegate
+    ports:
+      - "${DB_PORT:-5435}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U releasegate -d releasegate"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://releasegate:releasegate@db:5432/releasegate
+      JWT_SECRET_KEY: dev-only-secret-change-me
+    ports:
+      - "${BACKEND_PORT:-8003}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
