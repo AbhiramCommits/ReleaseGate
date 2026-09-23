@@ -40,9 +40,15 @@ SUBSYSTEMS = [
 
 CHANGE_TEMPLATES = [
     ("Bracket reinforcement", "Strengthen mounting brackets to meet updated durability targets."),
-    ("Wiring harness routing update", "Reroute main harness to reduce chafing risk near the firewall."),
+    (
+        "Wiring harness routing update",
+        "Reroute main harness to reduce chafing risk near the firewall.",
+    ),
     ("Software calibration update", "Update ECU calibration to improve cold-start behavior."),
-    ("Fastener torque revision", "Revise torque specification on suspension fasteners per new test data."),
+    (
+        "Fastener torque revision",
+        "Revise torque specification on suspension fasteners per new test data.",
+    ),
     ("Material substitution", "Replace bracket material with a higher-strength alloy."),
     ("Sensor mount relocation", "Relocate wheel speed sensor mount for improved signal quality."),
     ("Seal geometry change", "Adjust door seal geometry to reduce wind noise at highway speed."),
@@ -185,8 +191,7 @@ def seed() -> None:
                 ):
                     actor = users[Role.ADMIN]
                 elif from_stage is ChangeStage.ENGINEERING_REVIEW and (
-                    to_stage is ChangeStage.MANUFACTURING_REVIEW
-                    or to_stage is ChangeStage.REJECTED
+                    to_stage is ChangeStage.MANUFACTURING_REVIEW or to_stage is ChangeStage.REJECTED
                 ):
                     actor = users[Role.REVIEWER]
 

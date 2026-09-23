@@ -1,4 +1,3 @@
-import enum
 import uuid
 from datetime import datetime
 
@@ -18,33 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-
-
-class Role(str, enum.Enum):
-    REQUESTER = "REQUESTER"
-    REVIEWER = "REVIEWER"
-    ADMIN = "ADMIN"
-
-
-class RiskLevel(str, enum.Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-
-
-class ChangeStage(str, enum.Enum):
-    DRAFT = "DRAFT"
-    SUBMITTED = "SUBMITTED"
-    ENGINEERING_REVIEW = "ENGINEERING_REVIEW"
-    MANUFACTURING_REVIEW = "MANUFACTURING_REVIEW"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-
-
-class Decision(str, enum.Enum):
-    APPROVE = "APPROVE"
-    REJECT = "REJECT"
-    REQUEST_CHANGES = "REQUEST_CHANGES"
+from app.enums import ChangeStage, Decision, RiskLevel, Role
 
 
 class User(Base):
@@ -107,9 +80,7 @@ class Approval(Base):
     reviewer_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id"), nullable=False, index=True
     )
-    decision: Mapped[Decision] = mapped_column(
-        SAEnum(Decision, name="decision"), nullable=False
-    )
+    decision: Mapped[Decision] = mapped_column(SAEnum(Decision, name="decision"), nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

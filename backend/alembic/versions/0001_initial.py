@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-09-22
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -17,9 +18,7 @@ down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-user_role = postgresql.ENUM(
-    "REQUESTER", "REVIEWER", "ADMIN", name="user_role", create_type=False
-)
+user_role = postgresql.ENUM("REQUESTER", "REVIEWER", "ADMIN", name="user_role", create_type=False)
 risk_level = postgresql.ENUM("LOW", "MEDIUM", "HIGH", name="risk_level", create_type=False)
 change_stage = postgresql.ENUM(
     "DRAFT",

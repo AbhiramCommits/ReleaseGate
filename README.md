@@ -99,15 +99,44 @@ Open http://localhost:5173 and sign in with one of the seeded users above.
 
 ## API
 
-| Method | Path          | Description                                                  |
-| ------ | ------------- | ------------------------------------------------------------ |
-| POST   | `/auth/login` | `{ "email", "password" }` -> `{ "access_token", "token_type" }` |
-| GET    | `/healthz`    | `{"status":"ok","db":"ok"}` after a real `SELECT 1`          |
-| GET    | `/graphql`    | GraphQL endpoint (GraphiQL in development)                   |
+| Method | Path                                    | Description                                                  |
+| ------ | --------------------------------------- | ------------------------------------------------------------ |
+| POST   | `/auth/login`                           | `{ "email", "password" }` -> `{ "access_token", "token_type" }` |
+| GET    | `/healthz`                              | `{"status":"ok","db":"ok"}` after a real `SELECT 1`          |
+| GET    | `/graphql`                              | GraphQL endpoint (GraphiQL in development)                   |
+| GET    | `/api/v1/change-requests`               | List requests; filters: `stage`, `risk_level`, `requester_id`, `subsystem`; offset pagination (`offset`, `limit`), sorted by `updated_at` desc |
+| POST   | `/api/v1/change-requests`               | Create a request (starts in DRAFT)                           |
+| GET    | `/api/v1/change-requests/{id}`          | Get one request                                              |
+| PATCH  | `/api/v1/change-requests/{id}`          | Update request fields; requester-owner only, DRAFT only      |
+| POST   | `/api/v1/change-requests/{id}/transitions` | `{ "action": "SUBMIT\|APPROVE\|REQUEST_CHANGES\|REJECT", "comment" }`; runs the state machine |
+| GET    | `/api/v1/change-requests/{id}/audit`    | Full ordered audit trail                                     |
+| GET    | `/api/v1/analytics/cycle-time`          | Per-stage dwell-time stats, current stage counts, end-to-end latency, slowest stages |
+
+All `/api/v1` endpoints require `Authorization: Bearer <token>`.
 
 JWT tokens are HS256-signed and carry the user id in the `sub` claim. Protected endpoints
 use the `get_current_user` FastAPI dependency, which decodes the `Authorization: Bearer`
 token and loads the user from the database.
+
+Every request gets a request id (from the `X-Request-Id` header or generated), echoed back
+in the `X-Request-Id` response header and included in the structured JSON logs.
+
+## Workflow
+
+State machine (see `backend/app/workflow.py`, pure functions):
+
+```
+DRAFT --SUBMIT (requester-owner)--> SUBMITTED --APPROVE (reviewer/admin)--> ENGINEERING_REVIEW
+ENGINEERING_REVIEW --APPROVE--> MANUFACTURING_REVIEW    (HIGH risk needs two distinct reviewers)
+ENGINEERING_REVIEW --REQUEST_CHANGES--> DRAFT
+MANUFACTURING_REVIEW --APPROVE--> APPROVED (terminal)
+MANUFACTURING_REVIEW --REQUEST_CHANGES--> DRAFT
+ENGINEERING_REVIEW | MANUFACTURING_REVIEW --REJECT--> REJECTED (terminal)
+```
+
+Rule violations: `InvalidTransition` -> 409, `PermissionDenied` -> 403. Reviewers cannot
+approve a request twice at the same stage and cannot approve their own requests. Each
+transition commits atomically: approval row + stage update + audit event.
 
 ## Database schema
 
