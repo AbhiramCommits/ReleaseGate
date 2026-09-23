@@ -20,6 +20,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://releasegate:releasegate@db:5432/releasegate
       JWT_SECRET_KEY: dev-only-secret-change-me
+      SEED_ON_STARTUP: "true"
     ports:
       - "${BACKEND_PORT:-8003}:8000"
     depends_on:

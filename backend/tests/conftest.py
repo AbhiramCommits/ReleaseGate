@@ -23,13 +23,6 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-TEST_DB_PORT = _free_port()
-TEST_DATABASE_URL = (
-    f"postgresql+psycopg2://{TEST_DB_USER}:{TEST_DB_PASSWORD}"
-    f"@127.0.0.1:{TEST_DB_PORT}/{TEST_DB_NAME}"
-)
-
-
 def _docker_binary() -> str:
     for candidate in ("docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"):
         resolved = shutil.which(candidate)
@@ -89,8 +82,24 @@ def _stop_test_database() -> None:
     subprocess.run([DOCKER, "rm", "-f", TEST_DB_CONTAINER], capture_output=True, check=False)
 
 
-_start_test_database()
-atexit.register(_stop_test_database)
+def _resolve_test_database() -> tuple[str, bool]:
+    external = os.environ.get("TEST_DATABASE_URL")
+    if external:
+        return external, False
+    port = _free_port()
+    url = (
+        f"postgresql+psycopg2://{TEST_DB_USER}:{TEST_DB_PASSWORD}"
+        f"@127.0.0.1:{port}/{TEST_DB_NAME}"
+    )
+    return url, True
+
+
+TEST_DATABASE_URL, _MANAGES_DATABASE = _resolve_test_database()
+
+if _MANAGES_DATABASE:
+    TEST_DB_PORT = int(TEST_DATABASE_URL.rsplit(":", 1)[1].split("/")[0])
+    _start_test_database()
+    atexit.register(_stop_test_database)
 
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["JWT_SECRET_KEY"] = "test-secret-key"
@@ -98,7 +107,8 @@ os.environ["JWT_SECRET_KEY"] = "test-secret-key"
 
 @pytest.fixture(scope="session", autouse=True)
 def migrated_database() -> None:
-    _wait_until_ready()
+    if _MANAGES_DATABASE:
+        _wait_until_ready()
     from alembic.config import Config
 
     from alembic import command

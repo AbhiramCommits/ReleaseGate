@@ -27,3 +27,11 @@ test-results/
 .idea/
 .vscode/
 .DS_Store
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.auto.tfvars
+terraform.tfvars
+crash.log

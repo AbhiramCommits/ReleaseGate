@@ -1,5 +1,6 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
+gunicorn>=21.2,<24
 strawberry-graphql[fastapi]>=0.235,<1
 sqlalchemy>=2.0.30,<3
 alembic>=1.13,<2

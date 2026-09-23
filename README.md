@@ -1,29 +1,121 @@
 # ReleaseGate
 
-Engineering change request (ECR) management platform with role-based review workflows,
-audit logging, and analytics-ready data.
+Engineering change request (ECR) management with role-based review workflows,
+append-only audit logging, and analytics-ready data. React + TypeScript frontend,
+FastAPI + Strawberry GraphQL backend, PostgreSQL 15, deployed on AWS ECS Fargate.
 
-## Monorepo layout
+## Architecture
 
+```mermaid
+flowchart LR
+    subgraph Client
+        U[Browser / API client]
+    end
+
+    subgraph AWS
+        subgraph VPC
+            ALB[Application Load Balancer]
+            subgraph ECS[ECS Fargate service]
+                FRONT[frontend container<br/>nginx + React SPA]
+                BACK[backend container<br/>gunicorn + uvicorn<br/>FastAPI + Strawberry]
+            end
+            RDS[(RDS PostgreSQL 15)]
+        end
+        ECR[ECR repositories]
+        SM[AWS Secrets Manager<br/>DATABASE_URL / JWT_SECRET_KEY]
+    end
+
+    subgraph GitHub
+        GA[GitHub Actions<br/>CI + deploy workflows]
+        OIDC[OIDC role assumption]
+    end
+
+    U -->|"HTTP: / /api/* /graphql /auth/* /healthz"| ALB
+    ALB -->|"/api/* /graphql* /auth/* /healthz*"| BACK
+    ALB -->|"default"| FRONT
+    FRONT -->|"internal proxy /auth /healthz /graphql"| BACK
+    BACK --> RDS
+    BACK --> SM
+    GA -->|push images tagged with git SHA| ECR
+    GA -->|short-lived credentials| OIDC
+    ECR --> ECS
 ```
-releasegate/
-  backend/    FastAPI + Strawberry GraphQL + SQLAlchemy 2.x + Alembic
-  frontend/   React 18 + TypeScript + Vite
-  docker-compose.yml
-  README.md
+
+- **Backend**: FastAPI (REST under `/api/v1`) + Strawberry GraphQL (`/graphql`),
+  SQLAlchemy 2.x + Alembic, JWT auth, structured JSON logs with request ids.
+- **Frontend**: Vite + React 18 + TypeScript (strict), TanStack Query with
+  graphql-codegen typed hooks, plain CSS modules, Recharts.
+- **CI/CD**: GitHub Actions runs ruff/mypy/pytest (coverage >= 80%), tsc/eslint/vitest,
+  and a Playwright e2e job. On push to `main` (after CI passes) the deploy workflow
+  assumes an AWS role via OIDC, pushes both images to ECR, and rolls out a new ECS
+  task definition — gated on `/healthz`.
+
+## Workflow state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT
+    DRAFT --> SUBMITTED: SUBMIT (requester-owner)
+    SUBMITTED --> ENGINEERING_REVIEW: APPROVE (reviewer/admin)
+    ENGINEERING_REVIEW --> MANUFACTURING_REVIEW: APPROVE (reviewer/admin)
+    ENGINEERING_REVIEW --> DRAFT: REQUEST_CHANGES
+    MANUFACTURING_REVIEW --> APPROVED: APPROVE (reviewer/admin)
+    MANUFACTURING_REVIEW --> DRAFT: REQUEST_CHANGES
+    ENGINEERING_REVIEW --> REJECTED: REJECT
+    MANUFACTURING_REVIEW --> REJECTED: REJECT
+    APPROVED --> [*]
+    REJECTED --> [*]
 ```
 
-## Stack
+Rules enforced by the pure state machine in `backend/app/workflow.py`:
 
-| Layer    | Tech                                                                 |
-| -------- | -------------------------------------------------------------------- |
-| Backend  | Python 3.11, FastAPI, Strawberry GraphQL, SQLAlchemy 2.x, Alembic    |
-| Database | PostgreSQL 15                                                        |
-| Frontend | React 18, TypeScript (strict), Vite, React Router, TanStack Query    |
+- `HIGH` risk requires **two distinct reviewers** to approve at ENGINEERING_REVIEW.
+- A reviewer may never approve the same request twice at the same stage, and may
+  never approve their own request.
+- Only the requester may edit a request, and only while it is DRAFT.
+- Every transition is atomic: approval row + stage update + audit event commit together.
 
-## Quick start (Docker)
+## Screens
 
-Bring up the whole stack with one command:
+| Screen          | Screenshot                                                      |
+| --------------- | --------------------------------------------------------------- |
+| Login           | ![Login](docs/screenshots/login.png)                            |
+| Requests list   | ![Requests](docs/screenshots/requests.png)                      |
+| Request detail  | ![Request detail](docs/screenshots/request-detail.png)          |
+| New request     | ![New request](docs/screenshots/new-request.png)                |
+| Analytics       | ![Analytics](docs/screenshots/analytics.png)                    |
+
+> Screenshot placeholders — drop real captures into `docs/screenshots/`.
+
+## API surface
+
+### REST (`/api/v1`, JWT `Authorization: Bearer`)
+
+| Method | Path                                    | Description                                                  |
+| ------ | --------------------------------------- | ------------------------------------------------------------ |
+| POST   | `/auth/login`                           | `{ "email", "password" }` -> `{ "access_token", "token_type" }` |
+| GET    | `/healthz`                              | `{"status":"ok","db":"ok"}` after a real `SELECT 1`          |
+| GET    | `/api/v1/change-requests`               | List; filters `stage`, `risk_level`, `requester_id`, `subsystem`; offset pagination, sorted by `updated_at` desc |
+| POST   | `/api/v1/change-requests`               | Create a request (starts in DRAFT)                           |
+| GET    | `/api/v1/change-requests/{id}`          | Get one request                                              |
+| PATCH  | `/api/v1/change-requests/{id}`          | Update fields; requester-owner only, DRAFT only              |
+| POST   | `/api/v1/change-requests/{id}/transitions` | `{ "action": "SUBMIT\|APPROVE\|REQUEST_CHANGES\|REJECT", "comment" }` |
+| GET    | `/api/v1/change-requests/{id}/audit`    | Full ordered audit trail                                     |
+| GET    | `/api/v1/analytics/cycle-time`          | Per-stage dwell stats, current-stage counts, e2e latency, slowest stages |
+
+### GraphQL (`/graphql`, GraphiQL in dev via `ENABLE_GRAPHIQL`)
+
+- Queries: `me`, `changeRequest(id)`, `changeRequests(stage, riskLevel, subsystem, first, after)`
+  (Relay-style connection with `pageInfo` and cursors), `cycleTimeAnalytics`
+- Mutations: `createChangeRequest`, `updateChangeRequest`, `transitionChangeRequest(id, action, comment)`
+- Workflow violations surface as GraphQL errors with `extensions.code`
+  `PERMISSION_DENIED` (403) or `INVALID_TRANSITION` (409).
+- Unauthenticated access is rejected except for `__schema` (introspection).
+- Requester/reviewer/actor lookups go through DataLoaders (no N+1).
+
+## Local development
+
+### Quick start (Docker)
 
 ```sh
 docker compose up --build
@@ -36,8 +128,9 @@ docker compose up --build
 | GraphQL  | http://localhost:8003/graphql          |
 | Health   | http://localhost:8003/healthz          |
 
-The backend container runs `alembic upgrade head` and `python -m app.seed` on startup, so the
-database is migrated and seeded automatically. Seed data is idempotent and skipped on restart.
+Host ports are configurable via `DB_PORT`, `BACKEND_PORT`, and `FRONTEND_PORT`.
+The backend entrypoint runs `alembic upgrade head` (and seeds when
+`SEED_ON_STARTUP=true`, the compose default) before starting gunicorn.
 
 ### Seeded users
 
@@ -47,24 +140,11 @@ database is migrated and seeded automatically. Seed data is idempotent and skipp
 | reviewer@releasegate.dev  | REVIEWER  | password123  |
 | admin@releasegate.dev     | ADMIN     | password123  |
 
-The seed also creates ~40 change requests (`ECR-1000` ... `ECR-1039`) spread across all stages
-with timestamps backdated over 90 days, plus matching approvals and audit events.
+The seed creates 40 change requests (`ECR-1000` ... `ECR-1039`) spread across all
+stages with timestamps backdated over 90 days, plus matching approvals and audit
+events. It is idempotent and skipped on restart.
 
-## Local development
-
-### 1. Database
-
-Run only PostgreSQL (published on port 5435):
-
-```sh
-docker compose up -d db
-```
-
-Host ports are configurable via `DB_PORT`, `BACKEND_PORT`, and `FRONTEND_PORT`
-(see `docker-compose.yml`). The commands below assume the defaults
-(db on 5435, API on 8003, frontend on 3000).
-
-### 2. Backend (uv)
+### Backend (uv)
 
 ```sh
 cd backend
@@ -74,19 +154,7 @@ uv run python -m app.seed
 uv run uvicorn app.main:app --reload --port 8003
 ```
 
-Fallback without uv (pip):
-
-```sh
-cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
-python -m app.seed
-uvicorn app.main:app --reload --port 8003
-```
-
-### 3. Frontend
+### Frontend
 
 ```sh
 cd frontend
@@ -95,107 +163,85 @@ npm run dev
 ```
 
 Vite proxies `/auth`, `/healthz`, and `/graphql` to `http://localhost:8003`.
-Open http://localhost:5173 and sign in with one of the seeded users above.
-
-The frontend talks to the GraphQL API. TypeScript types and typed TanStack Query hooks
-are generated from `frontend/schema.graphql` with graphql-codegen
-(`npm run codegen`), and regeneration is part of `npm run build`.
-
-### 4. GraphQL schema sync
-
-`backend/schema.graphql` is the exported SDL. `make schema` (from the repo root)
-regenerates it and copies it to `frontend/schema.graphql`. A backend test asserts the
-committed file always matches the live schema.
-
-```sh
-make schema
-```
+GraphQL types/hooks are generated from `frontend/schema.graphql`; regenerate with
+`npm run codegen` (also part of `npm run build`). `make schema` re-exports the SDL
+from the backend and syncs it to the frontend.
 
 ## Testing
 
-All targets run from the repo root (delegate to `backend/Makefile` and `frontend` npm scripts):
+From the repo root:
 
 ```sh
 make test   # backend pytest (coverage >= 80%, dockerized Postgres) + frontend vitest
 make lint   # ruff + mypy + eslint + tsc --noEmit
 make fmt    # ruff format + prettier
-make e2e    # Playwright workflow test (requires Docker)
+make e2e    # docker compose up -> Playwright -> down
 ```
 
 Backend tests never use SQLite: the suite boots an ephemeral `postgres:15` Docker
-container, runs Alembic migrations against it, and truncates tables between tests.
-Coverage targets `app/workflow.py`, the repository/service layer (`app/repositories`),
-and the API layer (`app/routers`, `app/graphql`) — all >= 80%.
+container (or uses `TEST_DATABASE_URL` when provided, e.g. the CI service container),
+runs Alembic migrations, and truncates tables between tests. Coverage targets the
+state machine (`app/workflow.py`), the service/repository layer
+(`app/repositories`), and the API layer (`app/routers`, `app/graphql`) — all >= 80%.
 
-Frontend tests use Vitest + React Testing Library + MSW (mock the GraphQL endpoint),
-and one Playwright end-to-end test drives the real stack: requester creates and
-submits, then the reviewer approves through both review stages.
+Frontend tests use Vitest + React Testing Library + MSW, and a Playwright end-to-end
+test drives the real stack (requester creates/submits, reviewer approves through both
+review stages).
 
-## API
+## Deployment
 
-REST:
+### 1. Provision infrastructure (Terraform)
 
-| Method | Path                                    | Description                                                  |
-| ------ | --------------------------------------- | ------------------------------------------------------------ |
-| POST   | `/auth/login`                           | `{ "email", "password" }` -> `{ "access_token", "token_type" }` |
-| GET    | `/healthz`                              | `{"status":"ok","db":"ok"}` after a real `SELECT 1`          |
-| GET    | `/api/v1/change-requests`               | List requests; filters: `stage`, `risk_level`, `requester_id`, `subsystem`; offset pagination (`offset`, `limit`), sorted by `updated_at` desc |
-| POST   | `/api/v1/change-requests`               | Create a request (starts in DRAFT)                           |
-| GET    | `/api/v1/change-requests/{id}`          | Get one request                                              |
-| PATCH  | `/api/v1/change-requests/{id}`          | Update request fields; requester-owner only, DRAFT only      |
-| POST   | `/api/v1/change-requests/{id}/transitions` | `{ "action": "SUBMIT\|APPROVE\|REQUEST_CHANGES\|REJECT", "comment" }`; runs the state machine |
-| GET    | `/api/v1/change-requests/{id}/audit`    | Full ordered audit trail                                     |
-| GET    | `/api/v1/analytics/cycle-time`          | Per-stage dwell-time stats, current stage counts, end-to-end latency, slowest stages |
-
-GraphQL (`/graphql`, GraphiQL enabled in dev via `ENABLE_GRAPHIQL`):
-
-- Queries: `me`, `changeRequest(id)`, `changeRequests(stage, riskLevel, subsystem, first, after)`
-  (Relay-style connection with `pageInfo` and cursors), `cycleTimeAnalytics`
-- Mutations: `createChangeRequest`, `updateChangeRequest`, `transitionChangeRequest(id, action, comment)`
-- The same repository/service layer backs GraphQL and REST; workflow errors surface as
-  GraphQL errors with `extensions.code` `PERMISSION_DENIED` (403) or `INVALID_TRANSITION` (409).
-- Auth reads the JWT from the `Authorization` header per request. Unauthenticated access is
-  rejected except for `__schema` (introspection). Requester/reviewer/actor lookups go through
-  DataLoaders to avoid N+1 queries.
-
-All `/api/v1` endpoints require `Authorization: Bearer <token>`.
-
-JWT tokens are HS256-signed and carry the user id in the `sub` claim. Protected endpoints
-use the `get_current_user` FastAPI dependency, which decodes the `Authorization: Bearer`
-token and loads the user from the database.
-
-Every request gets a request id (from the `X-Request-Id` header or generated), echoed back
-in the `X-Request-Id` response header and included in the structured JSON logs.
-
-## Workflow
-
-State machine (see `backend/app/workflow.py`, pure functions):
-
-```
-DRAFT --SUBMIT (requester-owner)--> SUBMITTED --APPROVE (reviewer/admin)--> ENGINEERING_REVIEW
-ENGINEERING_REVIEW --APPROVE--> MANUFACTURING_REVIEW    (HIGH risk needs two distinct reviewers)
-ENGINEERING_REVIEW --REQUEST_CHANGES--> DRAFT
-MANUFACTURING_REVIEW --APPROVE--> APPROVED (terminal)
-MANUFACTURING_REVIEW --REQUEST_CHANGES--> DRAFT
-ENGINEERING_REVIEW | MANUFACTURING_REVIEW --REJECT--> REJECTED (terminal)
+```sh
+cd infra
+cp terraform.tfvars.example terraform.tfvars   # fill in your values
+terraform init
+terraform plan -out=plan.out                   # review the plan
+terraform apply plan.out
 ```
 
-Rule violations: `InvalidTransition` -> 409, `PermissionDenied` -> 403. Reviewers cannot
-approve a request twice at the same stage and cannot approve their own requests. Each
-transition commits atomically: approval row + stage update + audit event.
+This creates the VPC, both ECR repositories, the ECS cluster/service/task
+definition, the ALB (frontend target group + `/api`, `/graphql`, `/auth`,
+`/healthz` routing to the backend target group), RDS Postgres, Secrets Manager
+entries for `DATABASE_URL` and `JWT_SECRET_KEY`, and the GitHub OIDC provider with
+the deploy role. No `.tfstate` or real ARNs are ever committed.
 
-## Database schema
+### 2. Wire up GitHub
 
-- `users` - id (UUID), email (unique), full_name, hashed_password, role enum
-  (REQUESTER | REVIEWER | ADMIN), created_at
-- `change_requests` - id (UUID), ticket_key (unique, e.g. `ECR-1042`), title, description,
-  vehicle_program, subsystem, risk_level enum (LOW | MEDIUM | HIGH), current_stage enum
-  (DRAFT | SUBMITTED | ENGINEERING_REVIEW | MANUFACTURING_REVIEW | APPROVED | REJECTED),
-  requester_id FK, created_at, updated_at
-- `approvals` - id (UUID), change_request_id FK, stage enum, reviewer_id FK, decision enum
-  (APPROVE | REJECT | REQUEST_CHANGES), comment, decided_at
-- `audit_events` - id (UUID), change_request_id FK, actor_id FK, from_stage, to_stage,
-  action, metadata (JSONB), created_at. Append-only: never updated or deleted.
+```sh
+terraform output -raw task_definition_json > infra/ecs-task-definition.json
+```
 
-Indexes: `change_requests(current_stage)`, `change_requests(requester_id)`,
-`audit_events(change_request_id, created_at)`.
+Then set these repository **variables** (not secrets — the OIDC role provides
+short-lived credentials; no long-lived keys):
+
+| Variable                | Value                                            |
+| ----------------------- | ------------------------------------------------ |
+| `AWS_REGION`            | e.g. `us-east-1`                                 |
+| `AWS_ACCOUNT_ID`        | your AWS account id                              |
+| `AWS_DEPLOY_ROLE_ARN`   | `terraform output github_deploy_role_arn`        |
+| `DEPLOY_HEALTH_URL`     | `http://$(terraform output -raw alb_dns_name)`   |
+
+### 3. Ship
+
+Push to `main`. CI runs the full test suite; when it passes, the deploy workflow
+builds and pushes both images to ECR tagged with the git SHA, renders the ECS task
+definition, deploys with `wait-for-service-stability`, and verifies `/healthz`
+before reporting success.
+
+## Results
+
+Measured from the seeded dataset (40 change requests over a 90-day window):
+
+| Metric                                    | Value          |
+| ----------------------------------------- | -------------- |
+| Change requests processed                 | 40             |
+| Approvals recorded                        | 28             |
+| Audit events appended                     | 127            |
+| Average end-to-end approval latency       | 1,168.65 hours (~48.7 days) |
+| Slowest stage                             | DRAFT (avg 390.23 h, median 375.19 h) |
+| Current stage distribution                | 7 DRAFT / 7 SUBMITTED / 7 ENGINEERING_REVIEW / 7 MANUFACTURING_REVIEW / 7 APPROVED / 5 REJECTED |
+
+## License
+
+[MIT](LICENSE)

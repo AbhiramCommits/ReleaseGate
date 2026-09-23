@@ -7,6 +7,7 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     headless: true,
+    trace: "retain-on-failure",
   },
   webServer: {
     command: "docker compose -f ../docker-compose.yml up -d --build",

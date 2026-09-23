@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECS_CLUSTER: releasegate
+  ECS_SERVICE: releasegate-service
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: ${{ vars.AWS_ACCOUNT_ID }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/releasegate-backend:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/releasegate-frontend:${{ github.sha }}
+
+      - name: Render ECS task definition
+        id: render
+        run: |
+          BACKEND_IMAGE="${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/releasegate-backend:${{ github.sha }}"
+          FRONTEND_IMAGE="${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/releasegate-frontend:${{ github.sha }}"
+          jq --arg backend "$BACKEND_IMAGE" --arg frontend "$FRONTEND_IMAGE" \
+            '(.containerDefinitions[] | select(.name == "backend") | .image) = $backend |
+             (.containerDefinitions[] | select(.name == "frontend") | .image) = $frontend' \
+            infra/ecs-task-definition.json > task-definition.json
+          echo "task-definition=$(pwd)/task-definition.json" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify deployment health
+        run: |
+          HEALTH_URL="${{ vars.DEPLOY_HEALTH_URL }}/healthz"
+          for i in $(seq 1 30); do
+            if curl -fsS "$HEALTH_URL" | grep -q '"status":"ok"'; then
+              echo "Deployment healthy: $HEALTH_URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Deployment health check failed after 5 minutes"
+          exit 1

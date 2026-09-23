@@ -1,0 +1,12 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored and never committed.
+
+aws_region = "us-east-1"
+project_name = "releasegate"
+
+# GitHub org or user that owns the repository, used to scope the OIDC deploy role.
+github_org = "your-github-org"
+github_repo = "ReleaseGate"
+
+db_instance_class = "db.t3.micro"
+desired_count = 2
