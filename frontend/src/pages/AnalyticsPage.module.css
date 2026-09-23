@@ -67,3 +67,13 @@
 .error {
   color: #b91c1c;
 }
+
+.tileSkeletonLabel {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.chartSkeleton {
+  display: block;
+  margin-top: 1rem;
+}

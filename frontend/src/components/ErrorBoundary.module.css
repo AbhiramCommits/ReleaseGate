@@ -1,0 +1,34 @@
+.fallback {
+  max-width: 30rem;
+  margin: 4rem auto;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 2rem;
+}
+
+.title {
+  font-size: 1.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.message {
+  color: #6b7280;
+  margin: 0 0 1.25rem;
+}
+
+.retry {
+  padding: 0.5rem 1.25rem;
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.retry:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}

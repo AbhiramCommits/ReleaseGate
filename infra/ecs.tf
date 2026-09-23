@@ -117,7 +117,8 @@ resource "aws_ecs_task_definition" "app" {
         protocol      = "tcp"
       }]
       environment = [
-        { name = "SEED_ON_STARTUP", value = "false" }
+        { name = "SEED_ON_STARTUP", value = "false" },
+        { name = "ENVIRONMENT", value = "production" }
       ]
       secrets = [
         {

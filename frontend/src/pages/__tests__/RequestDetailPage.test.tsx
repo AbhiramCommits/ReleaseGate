@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
+import { HttpResponse } from "msw";
+import { axe } from "vitest-axe";
 import RequestDetailPage from "../RequestDetailPage";
 import { server } from "../../test/mocks/server";
 import {
   detailFixture,
   detailHandler,
+  gql,
   meHandler,
 } from "../../test/mocks/handlers";
 import { renderWithProviders } from "../../test/utils";
@@ -17,7 +21,7 @@ function renderDetail(
   meId = "me-1",
 ) {
   server.use(meHandler(meRole, meId), detailHandler(detail));
-  renderWithProviders(
+  return renderWithProviders(
     <Routes>
       <Route path="/requests/:id" element={<RequestDetailPage />} />
     </Routes>,
@@ -102,5 +106,51 @@ describe("RequestDetailPage action bar", () => {
     expect(
       screen.queryByRole("button", { name: "Approve" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("passes an axe accessibility check", async () => {
+    const { container } = renderDetail(
+      detailFixture({ currentStage: "ENGINEERING_REVIEW" }),
+      Role.Reviewer,
+    );
+    await screen.findByRole("button", { name: "Approve" });
+    const results = await axe(container, {
+      rules: {
+        "color-contrast": { enabled: false },
+      },
+    });
+    expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("RequestDetailPage optimistic transitions", () => {
+  it("rolls back the optimistic stage update when the transition fails", async () => {
+    server.use(
+      meHandler(Role.Reviewer),
+      detailHandler(detailFixture({ currentStage: "SUBMITTED" })),
+      gql.mutation("TransitionChangeRequest", () =>
+        HttpResponse.json({
+          errors: [{ message: "A reviewer may only approve a request once per stage." }],
+        }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Routes>
+        <Route path="/requests/:id" element={<RequestDetailPage />} />
+      </Routes>,
+      "/requests/req-1",
+    );
+
+    await screen.findByRole("button", { name: "Approve" });
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+
+    await screen.findByText("A reviewer may only approve a request once per stage.");
+    await waitFor(() =>
+      expect(screen.getByTestId("stage-badge")).toHaveTextContent("Submitted"),
+    );
   });
 });

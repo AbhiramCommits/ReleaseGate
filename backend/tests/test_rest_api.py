@@ -1,36 +1,11 @@
 import uuid
 
-import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.enums import ChangeStage, RiskLevel, Role
+from app.enums import ChangeStage, RiskLevel
 from app.models import Approval, AuditEvent, ChangeRequest, User
 from app.security import create_access_token
-
-
-@pytest.fixture
-async def client():
-    from app.main import app
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
-        yield http_client
-
-
-@pytest.fixture
-def requester(make_user) -> User:
-    return make_user(Role.REQUESTER)
-
-
-@pytest.fixture
-def reviewer(make_user) -> User:
-    return make_user(Role.REVIEWER)
-
-
-@pytest.fixture
-def admin(make_user) -> User:
-    return make_user(Role.ADMIN)
 
 
 def token_for(user: User) -> str:

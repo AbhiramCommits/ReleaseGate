@@ -95,9 +95,38 @@
   font-size: 0.875rem;
 }
 
+.actionButton:focus-visible,
+.comment:focus-visible,
+.link:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
 .actionButton:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.skeletonGap {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.skeletonRow {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.skeletonBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .error {

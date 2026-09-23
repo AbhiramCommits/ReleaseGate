@@ -1,24 +1,9 @@
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import event
 
 from app.enums import ChangeStage, Role
-from app.models import User
 from app.security import create_access_token
-
-
-@pytest.fixture
-async def client():
-    from app.main import app
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
-        yield http_client
-
-
-@pytest.fixture
-def requester(make_user) -> User:
-    return make_user(Role.REQUESTER)
 
 
 @pytest.fixture

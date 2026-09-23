@@ -3,16 +3,18 @@ import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import DecisionBadge from "../components/DecisionBadge";
 import RiskBadge from "../components/RiskBadge";
+import Skeleton from "../components/Skeleton";
 import StageBadge, { stageLabel } from "../components/StageBadge";
 import { formatDate } from "../format";
 import {
+  ChangeRequestDetailQuery,
   useChangeRequestDetailQuery,
   useChangeRequestsQuery,
   useMeQuery,
   useTransitionChangeRequestMutation,
   WorkflowAction,
 } from "../generated/graphql";
-import { ACTION_LABELS, allowedActions } from "../workflow";
+import { ACTION_LABELS, allowedActions, optimisticNextStage } from "../workflow";
 import styles from "./RequestDetailPage.module.css";
 
 export default function RequestDetailPage() {
@@ -21,21 +23,58 @@ export default function RequestDetailPage() {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
 
+  const detailKey = useChangeRequestDetailQuery.getKey({ id: requestId });
   const detailQuery = useChangeRequestDetailQuery({ id: requestId });
   const meQuery = useMeQuery();
-  const transitionMutation = useTransitionChangeRequestMutation({
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: useChangeRequestDetailQuery.getKey({ id: requestId }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: useChangeRequestsQuery.getKey(),
-      });
+  const transitionMutation = useTransitionChangeRequestMutation<
+    Error,
+    { previous?: ChangeRequestDetailQuery }
+  >({
+    onMutate: async ({ action }) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<ChangeRequestDetailQuery>(detailKey);
+      if (previous?.changeRequest) {
+        queryClient.setQueryData<ChangeRequestDetailQuery>(detailKey, {
+          ...previous,
+          changeRequest: {
+            ...previous.changeRequest,
+            currentStage: optimisticNextStage(action, previous.changeRequest.currentStage),
+          },
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(detailKey, context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+      queryClient.invalidateQueries({ queryKey: useChangeRequestsQuery.getKey() });
     },
   });
 
   if (detailQuery.isLoading) {
-    return <p className={styles.note}>Loading...</p>;
+    return (
+      <section className={styles.page} aria-busy="true">
+        <Skeleton width="6rem" height="1rem" />
+        <Skeleton width="20rem" height="1.75rem" className={styles.skeletonGap} />
+        <div className={styles.skeletonRow}>
+          <Skeleton width="9rem" height="1.5rem" />
+          <Skeleton width="5rem" height="1.5rem" />
+        </div>
+        <div className={styles.skeletonBlock}>
+          <Skeleton width="100%" height="1rem" />
+          <Skeleton width="85%" height="1rem" />
+          <Skeleton width="60%" height="1rem" />
+        </div>
+        <div className={styles.skeletonBlock}>
+          <Skeleton width="100%" height="1rem" />
+          <Skeleton width="70%" height="1rem" />
+        </div>
+      </section>
+    );
   }
 
   const request = detailQuery.data?.changeRequest;
@@ -43,7 +82,7 @@ export default function RequestDetailPage() {
     return (
       <section className={styles.page}>
         <h1 className={styles.title}>Request not found</h1>
-        <p className={styles.note}>{detailQuery.error?.message}</p>
+        <p className={styles.note}>{detailQuery.error?.message ?? "This request may have been removed."}</p>
         <Link className={styles.link} to="/requests">
           Back to requests
         </Link>
@@ -52,12 +91,7 @@ export default function RequestDetailPage() {
   }
 
   const me = meQuery.data?.me;
-  const actions = allowedActions(
-    me?.role,
-    request.currentStage,
-    request.requesterId,
-    me?.id,
-  );
+  const actions = allowedActions(me?.role, request.currentStage, request.requesterId, me?.id);
 
   const handleAction = (action: WorkflowAction) => {
     transitionMutation.mutate({
@@ -74,8 +108,8 @@ export default function RequestDetailPage() {
           <p className={styles.ticket}>{request.ticketKey}</p>
           <h1 className={styles.title}>{request.title}</h1>
           <p className={styles.meta}>
-            {request.vehicleProgram} &middot; {request.subsystem} &middot;
-            requested by {request.requester?.fullName ?? request.requesterId}
+            {request.vehicleProgram} &middot; {request.subsystem} &middot; requested by{" "}
+            {request.requester?.fullName ?? request.requesterId}
           </p>
         </div>
         <div className={styles.badges}>
@@ -85,8 +119,7 @@ export default function RequestDetailPage() {
       </div>
 
       <p className={styles.dates}>
-        Created {formatDate(request.createdAt)} &middot; Updated{" "}
-        {formatDate(request.updatedAt)}
+        Created {formatDate(request.createdAt)} &middot; Updated {formatDate(request.updatedAt)}
       </p>
 
       <section className={styles.section}>
@@ -95,9 +128,10 @@ export default function RequestDetailPage() {
       </section>
 
       {actions.length > 0 && (
-        <section className={styles.actionBar}>
+        <section className={styles.actionBar} aria-label="Transition actions">
           <h2 className={styles.sectionTitle}>Actions</h2>
           <textarea
+            aria-label="Transition comment"
             className={styles.comment}
             placeholder="Add a comment (optional)"
             value={comment}
@@ -118,7 +152,9 @@ export default function RequestDetailPage() {
             ))}
           </div>
           {transitionMutation.isError && (
-            <p className={styles.error}>{transitionMutation.error.message}</p>
+            <p className={styles.error} role="alert">
+              {transitionMutation.error.message}
+            </p>
           )}
         </section>
       )}
@@ -132,15 +168,11 @@ export default function RequestDetailPage() {
             {request.approvals.map((approval) => (
               <li key={approval.id} className={styles.approvalItem}>
                 <DecisionBadge decision={approval.decision} />
-                <span className={styles.approvalStage}>
-                  {stageLabel(approval.stage)}
-                </span>
+                <span className={styles.approvalStage}>{stageLabel(approval.stage)}</span>
                 <span className={styles.approvalReviewer}>
                   by {approval.reviewer?.fullName ?? "Unknown"}
                 </span>
-                <span className={styles.approvalDate}>
-                  {formatDate(approval.decidedAt)}
-                </span>
+                <span className={styles.approvalDate}>{formatDate(approval.decidedAt)}</span>
                 {approval.comment && (
                   <p className={styles.approvalComment}>{approval.comment}</p>
                 )}
@@ -152,26 +184,22 @@ export default function RequestDetailPage() {
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Audit Trail</h2>
-        <ol className={styles.timeline} data-testid="audit-timeline">
+        <ol className={styles.timeline} data-testid="audit-timeline" aria-label="Audit trail">
           {request.auditEvents.map((event) => (
             <li key={event.id} className={styles.timelineItem}>
               <span className={styles.timelineDot} />
               <div className={styles.timelineBody}>
                 <p className={styles.timelineAction}>
                   {event.action}
-                  {event.fromStage &&
-                    event.toStage &&
-                    event.fromStage !== event.toStage && (
-                      <span className={styles.timelineStage}>
-                        {" "}
-                        {stageLabel(event.fromStage)} &rarr;{" "}
-                        {stageLabel(event.toStage)}
-                      </span>
-                    )}
+                  {event.fromStage && event.toStage && event.fromStage !== event.toStage && (
+                    <span className={styles.timelineStage}>
+                      {" "}
+                      {stageLabel(event.fromStage)} &rarr; {stageLabel(event.toStage)}
+                    </span>
+                  )}
                 </p>
                 <p className={styles.timelineMeta}>
-                  {event.actor?.fullName ?? "Unknown"} &middot;{" "}
-                  {formatDate(event.createdAt)}
+                  {event.actor?.fullName ?? "Unknown"} &middot; {formatDate(event.createdAt)}
                 </p>
               </div>
             </li>

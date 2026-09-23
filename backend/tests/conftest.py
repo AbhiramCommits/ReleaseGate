@@ -37,7 +37,7 @@ def _docker_binary() -> str:
 DOCKER = _docker_binary()
 
 
-def _start_test_database() -> None:
+def _run_test_database() -> None:
     result = subprocess.run(
         [
             DOCKER,
@@ -46,6 +46,7 @@ def _start_test_database() -> None:
             "--rm",
             "--name",
             TEST_DB_CONTAINER,
+            "--shm-size=256m",
             "-p",
             f"{TEST_DB_PORT}:5432",
             "-e",
@@ -55,6 +56,16 @@ def _start_test_database() -> None:
             "-e",
             f"POSTGRES_DB={TEST_DB_NAME}",
             "postgres:15",
+            "-c",
+            "shared_buffers=64MB",
+            "-c",
+            "work_mem=1MB",
+            "-c",
+            "max_connections=50",
+            "-c",
+            "fsync=off",
+            "-c",
+            "synchronous_commit=off",
         ],
         capture_output=True,
         text=True,
@@ -62,6 +73,27 @@ def _start_test_database() -> None:
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to start dockerized test Postgres: {result.stderr.strip()}")
+
+
+def _start_test_database() -> None:
+    _run_test_database()
+    _wait_until_ready()
+
+
+def _restart_test_database() -> None:
+    _stop_test_database()
+    _run_test_database()
+    _wait_until_ready()
+
+
+def _run_migrations() -> None:
+    from alembic.config import Config
+
+    from alembic import command
+
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    command.upgrade(config, "head")
 
 
 def _wait_until_ready(timeout: float = 60.0) -> None:
@@ -109,13 +141,25 @@ os.environ["JWT_SECRET_KEY"] = "test-secret-key"
 def migrated_database() -> None:
     if _MANAGES_DATABASE:
         _wait_until_ready()
-    from alembic.config import Config
+    _run_migrations()
 
-    from alembic import command
 
-    config = Config(str(BACKEND_ROOT / "alembic.ini"))
-    config.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
-    command.upgrade(config, "head")
+@pytest.fixture(autouse=True)
+def ensure_database_alive() -> None:
+    if not _MANAGES_DATABASE:
+        yield
+        return
+    from sqlalchemy import text
+
+    from app.database import engine
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 - the health probe must recover from any DB failure
+        _restart_test_database()
+        _run_migrations()
+    yield
 
 
 @pytest.fixture(autouse=True)
@@ -134,6 +178,14 @@ def clean_tables() -> None:
         )
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> None:
+    yield
+    from app.main import limiter
+
+    limiter.reset()
+
+
 @pytest.fixture
 def db():
     from app.database import SessionLocal
@@ -143,6 +195,38 @@ def db():
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture
+async def client():
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import app
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
+        yield http_client
+
+
+@pytest.fixture
+def requester(make_user):
+    from app.enums import Role
+
+    return make_user(Role.REQUESTER)
+
+
+@pytest.fixture
+def reviewer(make_user):
+    from app.enums import Role
+
+    return make_user(Role.REVIEWER)
+
+
+@pytest.fixture
+def admin(make_user):
+    from app.enums import Role
+
+    return make_user(Role.ADMIN)
 
 
 @pytest.fixture

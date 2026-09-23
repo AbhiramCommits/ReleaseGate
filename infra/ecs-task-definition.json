@@ -12,7 +12,10 @@
       "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/releasegate-backend:<git-sha>",
       "essential": true,
       "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
-      "environment": [{ "name": "SEED_ON_STARTUP", "value": "false" }],
+      "environment": [
+        { "name": "SEED_ON_STARTUP", "value": "false" },
+        { "name": "ENVIRONMENT", "value": "production" }
+      ],
       "secrets": [
         { "name": "DATABASE_URL", "valueFrom": "<database-url-secret-arn>" },
         { "name": "JWT_SECRET_KEY", "valueFrom": "<jwt-secret-arn>" }

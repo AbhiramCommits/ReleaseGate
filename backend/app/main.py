@@ -6,10 +6,17 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.config import settings
 from app.database import get_db
 from app.graphql import graphql_app
 from app.logging import request_id_var, setup_logging
@@ -24,6 +31,8 @@ setup_logging()
 
 logger = logging.getLogger("app")
 
+limiter = Limiter(key_func=get_remote_address)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -32,12 +41,43 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="ReleaseGate API", version="0.1.0", lifespan=lifespan)
+app.state.limiter = limiter
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def problem_response(
+    status_code: int,
+    title: str,
+    detail: str | None = None,
+    instance: str | None = None,
+    extensions: dict | None = None,
+) -> JSONResponse:
+    payload: dict = {
+        "type": "about:blank",
+        "title": title,
+        "status": status_code,
+    }
+    if detail is not None:
+        payload["detail"] = detail
+    if instance is not None:
+        payload["instance"] = instance
+    if extensions:
+        payload.update(extensions)
+    return JSONResponse(
+        status_code=status_code,
+        content=payload,
+        media_type="application/problem+json",
+    )
+
+
 @auth_router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(
+    request: Request,
+    payload: LoginRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == payload.email))
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -53,14 +93,60 @@ def healthz(db: Annotated[Session, Depends(get_db)]) -> dict[str, str]:
     return {"status": "ok", "db": "ok"}
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    title = "Server error" if exc.status_code >= 500 else "Request failed"
+    return problem_response(
+        exc.status_code,
+        title,
+        detail=str(exc.detail),
+        instance=request.url.path,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    return problem_response(
+        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "Request validation failed",
+        detail="The request body or parameters are invalid.",
+        instance=request.url.path,
+        extensions={"errors": exc.errors()},
+    )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(
+    request: Request, exc: RateLimitExceeded
+) -> JSONResponse:
+    return problem_response(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "Too many requests",
+        detail=str(exc.detail),
+        instance=request.url.path,
+    )
+
+
 @app.exception_handler(InvalidTransition)
-async def invalid_transition_handler(_: Request, exc: InvalidTransition) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+async def invalid_transition_handler(request: Request, exc: InvalidTransition) -> JSONResponse:
+    return problem_response(
+        status.HTTP_409_CONFLICT,
+        "Invalid transition",
+        detail=str(exc),
+        instance=request.url.path,
+    )
 
 
 @app.exception_handler(PermissionDenied)
-async def permission_denied_handler(_: Request, exc: PermissionDenied) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
+async def permission_denied_handler(request: Request, exc: PermissionDenied) -> JSONResponse:
+    return problem_response(
+        status.HTTP_403_FORBIDDEN,
+        "Permission denied",
+        detail=str(exc),
+        instance=request.url.path,
+    )
 
 
 @app.middleware("http")
@@ -77,9 +163,11 @@ async def request_logging_middleware(
         status_code = response.status_code
     except Exception:
         logger.exception("Unhandled error while processing request")
-        response = JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
+        response = problem_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            detail="An unexpected error occurred.",
+            instance=request.url.path,
         )
     finally:
         request_id_var.reset(token)
@@ -97,6 +185,13 @@ async def request_logging_middleware(
     )
     return response
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth_router)
 app.include_router(change_requests_router.router)

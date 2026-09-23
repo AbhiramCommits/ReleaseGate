@@ -30,6 +30,21 @@
   background: #ffffff;
 }
 
+.select:focus-visible,
+.pageButton:focus-visible,
+.link:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.skeletonRow {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

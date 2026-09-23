@@ -36,3 +36,27 @@ export const ACTION_LABELS: Record<WorkflowAction, string> = {
   [WorkflowAction.RequestChanges]: "Request Changes",
   [WorkflowAction.Reject]: "Reject",
 };
+
+export function optimisticNextStage(action: WorkflowAction, stage: ChangeStage): ChangeStage {
+  switch (action) {
+    case WorkflowAction.Submit:
+      return ChangeStage.Submitted;
+    case WorkflowAction.Approve:
+      if (stage === ChangeStage.Submitted) {
+        return ChangeStage.EngineeringReview;
+      }
+      if (stage === ChangeStage.EngineeringReview) {
+        return ChangeStage.ManufacturingReview;
+      }
+      if (stage === ChangeStage.ManufacturingReview) {
+        return ChangeStage.Approved;
+      }
+      return stage;
+    case WorkflowAction.RequestChanges:
+      return ChangeStage.Draft;
+    case WorkflowAction.Reject:
+      return ChangeStage.Rejected;
+    default:
+      return stage;
+  }
+}

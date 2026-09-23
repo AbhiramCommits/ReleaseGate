@@ -188,6 +188,13 @@ Frontend tests use Vitest + React Testing Library + MSW, and a Playwright end-to
 test drives the real stack (requester creates/submits, reviewer approves through both
 review stages).
 
+## Architecture decisions
+
+- [ADR-001](docs/ADR-001-graphql-over-rest.md) — why GraphQL is layered over the
+  REST service layer instead of replacing it.
+- [ADR-002](docs/ADR-002-state-machine.md) — why transitions are validated in pure
+  functions, separate from persistence.
+
 ## Deployment
 
 ### 1. Provision infrastructure (Terraform)
@@ -241,6 +248,37 @@ Measured from the seeded dataset (40 change requests over a 90-day window):
 | Average end-to-end approval latency       | 1,168.65 hours (~48.7 days) |
 | Slowest stage                             | DRAFT (avg 390.23 h, median 375.19 h) |
 | Current stage distribution                | 7 DRAFT / 7 SUBMITTED / 7 ENGINEERING_REVIEW / 7 MANUFACTURING_REVIEW / 7 APPROVED / 5 REJECTED |
+
+## Impact
+
+- **Approval steps automated.** Every workflow transition automatically writes the
+  approval row, advances the stage, and appends the audit event in one transaction.
+  For the 40 seeded requests that is 28 approvals and 127 audit events recorded
+  with zero manual bookkeeping, and the dual-approval rule for HIGH-risk requests
+  is enforced by the state machine instead of by hand.
+- **Measured approval latency (seeded 90-day data).** Average end-to-end
+  approval latency is 1,168.65 hours (~48.7 days); the slowest stage is DRAFT
+  (390.23 h average dwell).
+- **API latency under load.** `bench/k6-load.js` runs 50 virtual users against
+  `changeRequests` and `cycleTimeAnalytics` for 30 s (median of 3 runs each, on a
+  shared dev machine — absolute values are machine-bound):
+
+  | Metric | Before DataLoaders + stage index | After DataLoaders + stage index |
+  | ------ | -------------------------------- | ------------------------------- |
+  | p50    | 152 ms                           | 158 ms                          |
+  | p95    | 719 ms                           | 873 ms                          |
+
+  The load pattern on this dev box makes wall-clock latency noisy; the
+  deterministic win is the query count below.
+- **Query-count reduction (DataLoaders).** For a page of 20 change requests with
+  the requester resolved per node: **22 queries before** (1 list + 1 count +
+  20 N+1 user lookups) versus **3 queries after** (1 list + 1 count + 1 batched
+  user lookup) — an 86% reduction, and the query count stays constant as the page
+  size grows (asserted by a test).
+
+```sh
+cd bench && k6 run k6-load.js           # BASE_URL/USER_* configurable via env
+```
 
 ## License
 

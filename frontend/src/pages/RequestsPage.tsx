@@ -2,13 +2,10 @@ import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import RiskBadge from "../components/RiskBadge";
+import Skeleton from "../components/Skeleton";
 import StageBadge from "../components/StageBadge";
 import { formatDate } from "../format";
-import {
-  ChangeStage,
-  RiskLevel,
-  useChangeRequestsQuery,
-} from "../generated/graphql";
+import { ChangeStage, RiskLevel, useChangeRequestsQuery } from "../generated/graphql";
 import styles from "./RequestsPage.module.css";
 
 const PAGE_SIZE = 10;
@@ -21,8 +18,7 @@ export default function RequestsPage() {
   const [riskLevel, setRiskLevel] = useState<RiskLevel | undefined>(undefined);
   const [cursorStack, setCursorStack] = useState<(string | undefined)[]>([]);
 
-  const after =
-    cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
+  const after = cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
   const query = useChangeRequestsQuery(
     { stage, riskLevel, first: PAGE_SIZE, after },
     { placeholderData: keepPreviousData },
@@ -41,10 +37,7 @@ export default function RequestsPage() {
   };
 
   const handleNext = () => {
-    setCursorStack((stack) => [
-      ...stack,
-      connection?.pageInfo.endCursor ?? undefined,
-    ]);
+    setCursorStack((stack) => [...stack, connection?.pageInfo.endCursor ?? undefined]);
   };
 
   const handlePrev = () => {
@@ -85,7 +78,22 @@ export default function RequestsPage() {
         </div>
       </div>
 
-      {query.isLoading && <p className={styles.note}>Loading...</p>}
+      {query.isLoading && (
+        <div className={styles.table}>
+          {Array.from({ length: 5 }, (_, row) => (
+            <div className={styles.skeletonRow} key={row}>
+              <Skeleton width="5rem" />
+              <Skeleton width="14rem" />
+              <Skeleton width="6rem" />
+              <Skeleton width="6rem" />
+              <Skeleton width="4rem" />
+              <Skeleton width="9rem" />
+              <Skeleton width="9rem" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {query.isError && <p className={styles.error}>{query.error?.message}</p>}
 
       {!query.isLoading && !query.isError && (
@@ -129,7 +137,10 @@ export default function RequestsPage() {
               {rows.length === 0 && (
                 <tr>
                   <td className={styles.empty} colSpan={7}>
-                    No change requests match the current filters.
+                    <p>No change requests match the current filters.</p>
+                    <Link className={styles.link} to="/requests/new">
+                      Create a new request
+                    </Link>
                   </td>
                 </tr>
               )}
@@ -145,7 +156,7 @@ export default function RequestsPage() {
             >
               Previous
             </button>
-            <span className={styles.pageInfo}>
+            <span className={styles.pageInfo} aria-live="polite">
               {connection ? `${connection.totalCount} total` : ""}
             </span>
             <button
