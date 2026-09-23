@@ -111,6 +111,26 @@ committed file always matches the live schema.
 make schema
 ```
 
+## Testing
+
+All targets run from the repo root (delegate to `backend/Makefile` and `frontend` npm scripts):
+
+```sh
+make test   # backend pytest (coverage >= 80%, dockerized Postgres) + frontend vitest
+make lint   # ruff + mypy + eslint + tsc --noEmit
+make fmt    # ruff format + prettier
+make e2e    # Playwright workflow test (requires Docker)
+```
+
+Backend tests never use SQLite: the suite boots an ephemeral `postgres:15` Docker
+container, runs Alembic migrations against it, and truncates tables between tests.
+Coverage targets `app/workflow.py`, the repository/service layer (`app/repositories`),
+and the API layer (`app/routers`, `app/graphql`) — all >= 80%.
+
+Frontend tests use Vitest + React Testing Library + MSW (mock the GraphQL endpoint),
+and one Playwright end-to-end test drives the real stack: requester creates and
+submits, then the reviewer approves through both review stages.
+
 ## API
 
 REST:

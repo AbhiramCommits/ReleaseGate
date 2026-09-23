@@ -27,7 +27,11 @@ export default function AnalyticsPage() {
   }
 
   if (query.isError || !query.data?.cycleTimeAnalytics) {
-    return <p className={styles.error}>{query.error?.message ?? "Failed to load analytics."}</p>;
+    return (
+      <p className={styles.error}>
+        {query.error?.message ?? "Failed to load analytics."}
+      </p>
+    );
   }
 
   const analytics = query.data.cycleTimeAnalytics;
@@ -38,9 +42,16 @@ export default function AnalyticsPage() {
   }));
 
   const countFor = (stage: ChangeStage) =>
-    analytics.currentStageCounts.find((entry) => entry.stage === stage)?.count ?? 0;
-  const inFlight = IN_FLIGHT_STAGES.reduce((total, stage) => total + countFor(stage), 0);
-  const totalRequests = analytics.currentStageCounts.reduce((total, entry) => total + entry.count, 0);
+    analytics.currentStageCounts.find((entry) => entry.stage === stage)
+      ?.count ?? 0;
+  const inFlight = IN_FLIGHT_STAGES.reduce(
+    (total, stage) => total + countFor(stage),
+    0,
+  );
+  const totalRequests = analytics.currentStageCounts.reduce(
+    (total, entry) => total + entry.count,
+    0,
+  );
   const slowest = analytics.topSlowestStages[0];
 
   return (
@@ -49,7 +60,9 @@ export default function AnalyticsPage() {
 
       <div className={styles.tiles}>
         <div className={styles.tile}>
-          <p className={styles.tileValue}>{formatHours(analytics.endToEndAverageHours)}</p>
+          <p className={styles.tileValue}>
+            {formatHours(analytics.endToEndAverageHours)}
+          </p>
           <p className={styles.tileLabel}>Avg end-to-end approval</p>
         </div>
         <div className={styles.tile}>
@@ -64,8 +77,9 @@ export default function AnalyticsPage() {
 
       {slowest && (
         <div className={styles.callout}>
-          <strong>Slowest stage:</strong> {stageLabel(slowest.stage)} with an average dwell of{" "}
-          {formatHours(slowest.averageHours)} ({slowest.samples} sample
+          <strong>Slowest stage:</strong> {stageLabel(slowest.stage)} with an
+          average dwell of {formatHours(slowest.averageHours)} (
+          {slowest.samples} sample
           {slowest.samples === 1 ? "" : "s"}).
         </div>
       )}
@@ -73,13 +87,26 @@ export default function AnalyticsPage() {
       <div className={styles.chartCard}>
         <h2 className={styles.chartTitle}>Average dwell hours per stage</h2>
         <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis />
             <Tooltip />
-            <Bar dataKey="averageHours" name="Avg hours" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="medianHours" name="Median hours" fill="#a5b4fc" radius={[4, 4, 0, 0]} />
+            <Bar
+              dataKey="averageHours"
+              name="Avg hours"
+              fill="#4f46e5"
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar
+              dataKey="medianHours"
+              name="Median hours"
+              fill="#a5b4fc"
+              radius={[4, 4, 0, 0]}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

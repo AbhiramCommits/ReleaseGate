@@ -26,7 +26,9 @@ export default function AppShell() {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
+              className={({ isActive }) =>
+                isActive ? `${styles.link} ${styles.active}` : styles.link
+              }
             >
               {item.label}
             </NavLink>

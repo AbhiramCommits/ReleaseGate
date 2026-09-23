@@ -91,7 +91,9 @@ def event_times(start: datetime, count: int, now: datetime) -> list[datetime]:
 
 
 def stage_transitions(target: ChangeStage) -> list[tuple[ChangeStage | None, ChangeStage, str]]:
-    transitions = [(None, ChangeStage.DRAFT, "CREATED")]
+    transitions: list[tuple[ChangeStage | None, ChangeStage, str]] = [
+        (None, ChangeStage.DRAFT, "CREATED")
+    ]
     if target is ChangeStage.DRAFT:
         return transitions
     transitions.append((ChangeStage.DRAFT, ChangeStage.SUBMITTED, "SUBMITTED"))

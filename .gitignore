@@ -12,6 +12,13 @@ venv/
 node_modules/
 dist/
 
+# Tests
+.coverage
+coverage.xml
+htmlcov/
+playwright-report/
+test-results/
+
 # Environment
 .env
 .env.*

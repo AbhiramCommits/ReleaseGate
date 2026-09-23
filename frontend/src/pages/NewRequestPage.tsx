@@ -1,6 +1,9 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { RiskLevel, useCreateChangeRequestMutation } from "../generated/graphql";
+import {
+  RiskLevel,
+  useCreateChangeRequestMutation,
+} from "../generated/graphql";
 import styles from "./NewRequestPage.module.css";
 
 interface FormState {
@@ -44,7 +47,9 @@ function validate(form: FormState): Partial<Record<keyof FormState, string>> {
 export default function NewRequestPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
+  const [touched, setTouched] = useState<
+    Partial<Record<keyof FormState, boolean>>
+  >({});
   const errors = validate(form);
 
   const createMutation = useCreateChangeRequestMutation({
@@ -53,14 +58,23 @@ export default function NewRequestPage() {
     },
   });
 
-  const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
+  const setField = <K extends keyof FormState>(
+    field: K,
+    value: FormState[K],
+  ) => {
     setForm((current) => ({ ...current, [field]: value }));
     setTouched((current) => ({ ...current, [field]: true }));
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setTouched({ title: true, description: true, vehicleProgram: true, subsystem: true, riskLevel: true });
+    setTouched({
+      title: true,
+      description: true,
+      vehicleProgram: true,
+      subsystem: true,
+      riskLevel: true,
+    });
     if (Object.keys(errors).length > 0 || !form.riskLevel) {
       return;
     }
@@ -104,7 +118,9 @@ export default function NewRequestPage() {
           placeholder="What is changing and why?"
           rows={5}
         />
-        {showError("description") && <p className={styles.error}>{errors.description}</p>}
+        {showError("description") && (
+          <p className={styles.error}>{errors.description}</p>
+        )}
 
         <div className={styles.row}>
           <div className={styles.column}>
@@ -115,7 +131,9 @@ export default function NewRequestPage() {
               id="vehicleProgram"
               className={styles.input}
               value={form.vehicleProgram}
-              onChange={(event) => setField("vehicleProgram", event.target.value)}
+              onChange={(event) =>
+                setField("vehicleProgram", event.target.value)
+              }
               placeholder="e.g. Voyager"
             />
             {showError("vehicleProgram") && (
@@ -133,7 +151,9 @@ export default function NewRequestPage() {
               onChange={(event) => setField("subsystem", event.target.value)}
               placeholder="e.g. Chassis"
             />
-            {showError("subsystem") && <p className={styles.error}>{errors.subsystem}</p>}
+            {showError("subsystem") && (
+              <p className={styles.error}>{errors.subsystem}</p>
+            )}
           </div>
         </div>
 
@@ -145,7 +165,12 @@ export default function NewRequestPage() {
           className={styles.select}
           value={form.riskLevel ?? ""}
           onChange={(event) =>
-            setField("riskLevel", event.target.value === "" ? undefined : (event.target.value as RiskLevel))
+            setField(
+              "riskLevel",
+              event.target.value === ""
+                ? undefined
+                : (event.target.value as RiskLevel),
+            )
           }
         >
           <option value="">Select a risk level</option>
@@ -155,13 +180,19 @@ export default function NewRequestPage() {
             </option>
           ))}
         </select>
-        {showError("riskLevel") && <p className={styles.error}>{errors.riskLevel}</p>}
+        {showError("riskLevel") && (
+          <p className={styles.error}>{errors.riskLevel}</p>
+        )}
 
         {createMutation.isError && (
           <p className={styles.error}>{createMutation.error.message}</p>
         )}
 
-        <button className={styles.submit} type="submit" disabled={createMutation.isPending}>
+        <button
+          className={styles.submit}
+          type="submit"
+          disabled={createMutation.isPending}
+        >
           {createMutation.isPending ? "Creating..." : "Create Request"}
         </button>
       </form>

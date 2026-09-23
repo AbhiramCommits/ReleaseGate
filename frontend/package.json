@@ -7,7 +7,11 @@
     "dev": "vite",
     "codegen": "graphql-codegen --config codegen.ts",
     "build": "npm run codegen && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint . && tsc --noEmit",
+    "fmt": "prettier --write .",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@graphql-typed-document-node/core": "^3.2.0",
@@ -18,14 +22,26 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@graphql-codegen/cli": "^7.4.2",
     "@graphql-codegen/typescript": "^6.1.0",
     "@graphql-codegen/typescript-operations": "^6.1.7",
     "@graphql-codegen/typescript-react-query": "^7.0.5",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^29.1.1",
+    "msw": "^2.15.0",
+    "prettier": "^3.9.9",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10"
+    "typescript-eslint": "^8.70.1",
+    "vite": "^5.4.10",
+    "vitest": "^4.1.11"
   }
 }

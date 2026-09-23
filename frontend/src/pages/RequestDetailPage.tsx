@@ -28,7 +28,9 @@ export default function RequestDetailPage() {
       queryClient.invalidateQueries({
         queryKey: useChangeRequestDetailQuery.getKey({ id: requestId }),
       });
-      queryClient.invalidateQueries({ queryKey: useChangeRequestsQuery.getKey() });
+      queryClient.invalidateQueries({
+        queryKey: useChangeRequestsQuery.getKey(),
+      });
     },
   });
 
@@ -50,7 +52,12 @@ export default function RequestDetailPage() {
   }
 
   const me = meQuery.data?.me;
-  const actions = allowedActions(me?.role, request.currentStage, request.requesterId, me?.id);
+  const actions = allowedActions(
+    me?.role,
+    request.currentStage,
+    request.requesterId,
+    me?.id,
+  );
 
   const handleAction = (action: WorkflowAction) => {
     transitionMutation.mutate({
@@ -67,8 +74,8 @@ export default function RequestDetailPage() {
           <p className={styles.ticket}>{request.ticketKey}</p>
           <h1 className={styles.title}>{request.title}</h1>
           <p className={styles.meta}>
-            {request.vehicleProgram} &middot; {request.subsystem} &middot; requested by{" "}
-            {request.requester?.fullName ?? request.requesterId}
+            {request.vehicleProgram} &middot; {request.subsystem} &middot;
+            requested by {request.requester?.fullName ?? request.requesterId}
           </p>
         </div>
         <div className={styles.badges}>
@@ -78,7 +85,8 @@ export default function RequestDetailPage() {
       </div>
 
       <p className={styles.dates}>
-        Created {formatDate(request.createdAt)} &middot; Updated {formatDate(request.updatedAt)}
+        Created {formatDate(request.createdAt)} &middot; Updated{" "}
+        {formatDate(request.updatedAt)}
       </p>
 
       <section className={styles.section}>
@@ -124,11 +132,15 @@ export default function RequestDetailPage() {
             {request.approvals.map((approval) => (
               <li key={approval.id} className={styles.approvalItem}>
                 <DecisionBadge decision={approval.decision} />
-                <span className={styles.approvalStage}>{stageLabel(approval.stage)}</span>
+                <span className={styles.approvalStage}>
+                  {stageLabel(approval.stage)}
+                </span>
                 <span className={styles.approvalReviewer}>
                   by {approval.reviewer?.fullName ?? "Unknown"}
                 </span>
-                <span className={styles.approvalDate}>{formatDate(approval.decidedAt)}</span>
+                <span className={styles.approvalDate}>
+                  {formatDate(approval.decidedAt)}
+                </span>
                 {approval.comment && (
                   <p className={styles.approvalComment}>{approval.comment}</p>
                 )}
@@ -140,22 +152,26 @@ export default function RequestDetailPage() {
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Audit Trail</h2>
-        <ol className={styles.timeline}>
+        <ol className={styles.timeline} data-testid="audit-timeline">
           {request.auditEvents.map((event) => (
             <li key={event.id} className={styles.timelineItem}>
               <span className={styles.timelineDot} />
               <div className={styles.timelineBody}>
                 <p className={styles.timelineAction}>
                   {event.action}
-                  {event.fromStage && event.toStage && event.fromStage !== event.toStage && (
-                    <span className={styles.timelineStage}>
-                      {" "}
-                      {stageLabel(event.fromStage)} &rarr; {stageLabel(event.toStage)}
-                    </span>
-                  )}
+                  {event.fromStage &&
+                    event.toStage &&
+                    event.fromStage !== event.toStage && (
+                      <span className={styles.timelineStage}>
+                        {" "}
+                        {stageLabel(event.fromStage)} &rarr;{" "}
+                        {stageLabel(event.toStage)}
+                      </span>
+                    )}
                 </p>
                 <p className={styles.timelineMeta}>
-                  {event.actor?.fullName ?? "Unknown"} &middot; {formatDate(event.createdAt)}
+                  {event.actor?.fullName ?? "Unknown"} &middot;{" "}
+                  {formatDate(event.createdAt)}
                 </p>
               </div>
             </li>

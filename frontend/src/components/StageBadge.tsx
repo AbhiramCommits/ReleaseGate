@@ -25,6 +25,11 @@ export function stageLabel(stage: ChangeStage): string {
 
 export default function StageBadge({ stage }: { stage: ChangeStage }) {
   return (
-    <span className={`${styles.badge} ${STAGE_CLASSES[stage]}`}>{STAGE_LABELS[stage]}</span>
+    <span
+      data-testid="stage-badge"
+      className={`${styles.badge} ${STAGE_CLASSES[stage]}`}
+    >
+      {STAGE_LABELS[stage]}
+    </span>
   );
 }

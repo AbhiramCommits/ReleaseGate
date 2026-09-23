@@ -58,8 +58,14 @@ export default function LoginPage() {
           autoComplete="current-password"
           required
         />
-        {mutation.isError && <p className={styles.error}>{mutation.error.message}</p>}
-        <button className={styles.submit} type="submit" disabled={mutation.isPending}>
+        {mutation.isError && (
+          <p className={styles.error}>{mutation.error.message}</p>
+        )}
+        <button
+          className={styles.submit}
+          type="submit"
+          disabled={mutation.isPending}
+        >
           {mutation.isPending ? "Signing in..." : "Sign in"}
         </button>
       </form>

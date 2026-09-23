@@ -4,7 +4,11 @@ import { Link } from "react-router-dom";
 import RiskBadge from "../components/RiskBadge";
 import StageBadge from "../components/StageBadge";
 import { formatDate } from "../format";
-import { ChangeStage, RiskLevel, useChangeRequestsQuery } from "../generated/graphql";
+import {
+  ChangeStage,
+  RiskLevel,
+  useChangeRequestsQuery,
+} from "../generated/graphql";
 import styles from "./RequestsPage.module.css";
 
 const PAGE_SIZE = 10;
@@ -17,7 +21,8 @@ export default function RequestsPage() {
   const [riskLevel, setRiskLevel] = useState<RiskLevel | undefined>(undefined);
   const [cursorStack, setCursorStack] = useState<(string | undefined)[]>([]);
 
-  const after = cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
+  const after =
+    cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
   const query = useChangeRequestsQuery(
     { stage, riskLevel, first: PAGE_SIZE, after },
     { placeholderData: keepPreviousData },
@@ -36,7 +41,10 @@ export default function RequestsPage() {
   };
 
   const handleNext = () => {
-    setCursorStack((stack) => [...stack, connection?.pageInfo.endCursor ?? undefined]);
+    setCursorStack((stack) => [
+      ...stack,
+      connection?.pageInfo.endCursor ?? undefined,
+    ]);
   };
 
   const handlePrev = () => {
@@ -49,6 +57,7 @@ export default function RequestsPage() {
         <h1 className={styles.title}>Change Requests</h1>
         <div className={styles.filters}>
           <select
+            aria-label="Stage filter"
             className={styles.select}
             value={stage ?? ""}
             onChange={(event) => handleStageChange(event.target.value)}
@@ -61,6 +70,7 @@ export default function RequestsPage() {
             ))}
           </select>
           <select
+            aria-label="Risk filter"
             className={styles.select}
             value={riskLevel ?? ""}
             onChange={(event) => handleRiskChange(event.target.value)}

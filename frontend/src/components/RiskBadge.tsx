@@ -18,5 +18,12 @@ export function riskLabel(risk: RiskLevel): string {
 }
 
 export default function RiskBadge({ risk }: { risk: RiskLevel }) {
-  return <span className={`${styles.badge} ${RISK_CLASSES[risk]}`}>{RISK_LABELS[risk]}</span>;
+  return (
+    <span
+      data-testid="risk-badge"
+      className={`${styles.badge} ${RISK_CLASSES[risk]}`}
+    >
+      {RISK_LABELS[risk]}
+    </span>
+  );
 }

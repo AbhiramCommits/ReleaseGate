@@ -13,7 +13,8 @@ export function graphqlFetcher<TData, TVariables>(
 ): () => Promise<TData> {
   return async () => {
     const token = getToken();
-    const response = await fetch("/graphql", {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const response = await fetch(new URL("/graphql", origin), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

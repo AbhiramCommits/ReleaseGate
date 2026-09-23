@@ -43,7 +43,12 @@ def list_change_requests(
         offset=offset,
         limit=limit,
     )
-    return ChangeRequestPage(items=items, total=total, offset=offset, limit=limit)
+    return ChangeRequestPage(
+        items=[ChangeRequestOut.model_validate(item) for item in items],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.post("", response_model=ChangeRequestOut, status_code=status.HTTP_201_CREATED)
@@ -52,7 +57,8 @@ def create_change_request(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ChangeRequestOut:
-    return change_requests_repository.create_change_request(db, payload, current_user)
+    change_request = change_requests_repository.create_change_request(db, payload, current_user)
+    return ChangeRequestOut.model_validate(change_request)
 
 
 @router.get("/{change_request_id}", response_model=ChangeRequestOut)
@@ -67,7 +73,7 @@ def get_change_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Change request not found",
         )
-    return change_request
+    return ChangeRequestOut.model_validate(change_request)
 
 
 @router.patch("/{change_request_id}", response_model=ChangeRequestOut)
@@ -90,7 +96,8 @@ def patch_change_request(
         actor_id=current_user.id,
         current_stage=change_request.current_stage,
     )
-    return change_requests_repository.update_change_request(db, change_request, payload)
+    updated = change_requests_repository.update_change_request(db, change_request, payload)
+    return ChangeRequestOut.model_validate(updated)
 
 
 @router.post("/{change_request_id}/transitions", response_model=ChangeRequestOut)
@@ -108,9 +115,10 @@ def transition_change_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Change request not found",
         )
-    return change_requests_repository.transition_change_request(
+    updated = change_requests_repository.transition_change_request(
         db, change_request, current_user, payload.action, payload.comment
     )
+    return ChangeRequestOut.model_validate(updated)
 
 
 @router.get("/{change_request_id}/audit", response_model=AuditTrailResponse)

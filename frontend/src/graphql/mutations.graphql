@@ -10,7 +10,11 @@ mutation UpdateChangeRequest($id: ID!, $input: ChangeRequestUpdateInput!) {
   }
 }
 
-mutation TransitionChangeRequest($id: ID!, $action: WorkflowAction!, $comment: String) {
+mutation TransitionChangeRequest(
+  $id: ID!
+  $action: WorkflowAction!
+  $comment: String
+) {
   transitionChangeRequest(id: $id, action: $action, comment: $comment) {
     id
     ticketKey

@@ -10,7 +10,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   const token = getToken();
@@ -20,12 +23,9 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const response = await fetch(path, { ...init, headers });
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
-    try {
-      const body = await response.json();
-      if (typeof body.detail === "string") {
-        message = body.detail;
-      }
-    } catch {
+    const body = await response.json().catch(() => null);
+    if (body && typeof body.detail === "string") {
+      message = body.detail;
     }
     throw new ApiError(response.status, message);
   }
@@ -37,7 +37,10 @@ export interface LoginResponse {
   token_type: string;
 }
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResponse> {
   const response = await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
