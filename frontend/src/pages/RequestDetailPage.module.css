@@ -1,0 +1,212 @@
+.page {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ticket {
+  margin: 0 0 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.title {
+  font-size: 1.5rem;
+  margin: 0 0 0.4rem;
+}
+
+.meta {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.dates {
+  color: #9ca3af;
+  font-size: 0.8rem;
+  margin: 0.5rem 0 1.5rem;
+}
+
+.section {
+  margin-top: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  margin: 0 0 0.75rem;
+  color: #374151;
+}
+
+.description {
+  white-space: pre-wrap;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 0;
+}
+
+.actionBar {
+  margin-top: 1.5rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.comment {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actionButton {
+  padding: 0.45rem 1rem;
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.actionButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0.75rem 0 0;
+}
+
+.approvalList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.approvalItem {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.approvalStage {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.approvalReviewer {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.approvalDate {
+  margin-left: auto;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+.approvalComment {
+  flex-basis: 100%;
+  margin: 0;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.25rem;
+  border-left: 2px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.timelineItem {
+  position: relative;
+}
+
+.timelineDot {
+  position: absolute;
+  left: -1.55rem;
+  top: 0.3rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: #6b7280;
+  border: 2px solid #ffffff;
+}
+
+.timelineBody {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.9rem;
+}
+
+.timelineAction {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.timelineStage {
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.timelineMeta {
+  margin: 0.2rem 0 0;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+.note {
+  color: #6b7280;
+}
+
+.link {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

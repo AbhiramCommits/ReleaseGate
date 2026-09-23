@@ -1,0 +1,122 @@
+fragment ChangeRequestSummary on ChangeRequestType {
+  id
+  ticketKey
+  title
+  vehicleProgram
+  subsystem
+  riskLevel
+  currentStage
+  updatedAt
+}
+
+fragment PageInfoFields on PageInfo {
+  hasNextPage
+  hasPreviousPage
+  startCursor
+  endCursor
+}
+
+query Me {
+  me {
+    id
+    email
+    fullName
+    role
+  }
+}
+
+query ChangeRequests(
+  $stage: ChangeStage
+  $riskLevel: RiskLevel
+  $subsystem: String
+  $first: Int
+  $after: String
+) {
+  changeRequests(
+    stage: $stage
+    riskLevel: $riskLevel
+    subsystem: $subsystem
+    first: $first
+    after: $after
+  ) {
+    edges {
+      cursor
+      node {
+        ...ChangeRequestSummary
+      }
+    }
+    pageInfo {
+      ...PageInfoFields
+    }
+    totalCount
+  }
+}
+
+query ChangeRequestDetail($id: ID!) {
+  changeRequest(id: $id) {
+    id
+    ticketKey
+    title
+    description
+    vehicleProgram
+    subsystem
+    riskLevel
+    currentStage
+    requesterId
+    createdAt
+    updatedAt
+    requester {
+      id
+      fullName
+      email
+      role
+    }
+    approvals {
+      id
+      stage
+      decision
+      comment
+      decidedAt
+      reviewer {
+        id
+        fullName
+        role
+      }
+    }
+    auditEvents {
+      id
+      fromStage
+      toStage
+      action
+      metadata
+      createdAt
+      actor {
+        id
+        fullName
+        role
+      }
+    }
+  }
+}
+
+query CycleTime {
+  cycleTimeAnalytics {
+    stageMetrics {
+      stage
+      averageHours
+      medianHours
+      samples
+    }
+    currentStageCounts {
+      stage
+      count
+    }
+    endToEndAverageHours
+    topSlowestStages {
+      stage
+      averageHours
+      medianHours
+      samples
+    }
+  }
+}

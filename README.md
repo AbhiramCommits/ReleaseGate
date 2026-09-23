@@ -97,13 +97,28 @@ npm run dev
 Vite proxies `/auth`, `/healthz`, and `/graphql` to `http://localhost:8003`.
 Open http://localhost:5173 and sign in with one of the seeded users above.
 
+The frontend talks to the GraphQL API. TypeScript types and typed TanStack Query hooks
+are generated from `frontend/schema.graphql` with graphql-codegen
+(`npm run codegen`), and regeneration is part of `npm run build`.
+
+### 4. GraphQL schema sync
+
+`backend/schema.graphql` is the exported SDL. `make schema` (from the repo root)
+regenerates it and copies it to `frontend/schema.graphql`. A backend test asserts the
+committed file always matches the live schema.
+
+```sh
+make schema
+```
+
 ## API
+
+REST:
 
 | Method | Path                                    | Description                                                  |
 | ------ | --------------------------------------- | ------------------------------------------------------------ |
 | POST   | `/auth/login`                           | `{ "email", "password" }` -> `{ "access_token", "token_type" }` |
 | GET    | `/healthz`                              | `{"status":"ok","db":"ok"}` after a real `SELECT 1`          |
-| GET    | `/graphql`                              | GraphQL endpoint (GraphiQL in development)                   |
 | GET    | `/api/v1/change-requests`               | List requests; filters: `stage`, `risk_level`, `requester_id`, `subsystem`; offset pagination (`offset`, `limit`), sorted by `updated_at` desc |
 | POST   | `/api/v1/change-requests`               | Create a request (starts in DRAFT)                           |
 | GET    | `/api/v1/change-requests/{id}`          | Get one request                                              |
@@ -111,6 +126,17 @@ Open http://localhost:5173 and sign in with one of the seeded users above.
 | POST   | `/api/v1/change-requests/{id}/transitions` | `{ "action": "SUBMIT\|APPROVE\|REQUEST_CHANGES\|REJECT", "comment" }`; runs the state machine |
 | GET    | `/api/v1/change-requests/{id}/audit`    | Full ordered audit trail                                     |
 | GET    | `/api/v1/analytics/cycle-time`          | Per-stage dwell-time stats, current stage counts, end-to-end latency, slowest stages |
+
+GraphQL (`/graphql`, GraphiQL enabled in dev via `ENABLE_GRAPHIQL`):
+
+- Queries: `me`, `changeRequest(id)`, `changeRequests(stage, riskLevel, subsystem, first, after)`
+  (Relay-style connection with `pageInfo` and cursors), `cycleTimeAnalytics`
+- Mutations: `createChangeRequest`, `updateChangeRequest`, `transitionChangeRequest(id, action, comment)`
+- The same repository/service layer backs GraphQL and REST; workflow errors surface as
+  GraphQL errors with `extensions.code` `PERMISSION_DENIED` (403) or `INVALID_TRANSITION` (409).
+- Auth reads the JWT from the `Authorization` header per request. Unauthenticated access is
+  rejected except for `__schema` (introspection). Requester/reviewer/actor lookups go through
+  DataLoaders to avoid N+1 queries.
 
 All `/api/v1` endpoints require `Authorization: Bearer <token>`.
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Integer, func, select, text
+from sqlalchemy import Integer, Select, and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.enums import ChangeStage, RiskLevel
@@ -17,6 +17,46 @@ from app.workflow import (
 
 TICKET_KEY_LOCK = 424242
 
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
+
+
+def _apply_filters(
+    stmt: Select,
+    *,
+    stage: ChangeStage | None = None,
+    risk_level: RiskLevel | None = None,
+    requester_id: uuid.UUID | None = None,
+    subsystem: str | None = None,
+) -> Select:
+    if stage is not None:
+        stmt = stmt.where(ChangeRequest.current_stage == stage)
+    if risk_level is not None:
+        stmt = stmt.where(ChangeRequest.risk_level == risk_level)
+    if requester_id is not None:
+        stmt = stmt.where(ChangeRequest.requester_id == requester_id)
+    if subsystem is not None:
+        stmt = stmt.where(ChangeRequest.subsystem == subsystem)
+    return stmt
+
+
+def count_change_requests(
+    db: Session,
+    *,
+    stage: ChangeStage | None = None,
+    risk_level: RiskLevel | None = None,
+    requester_id: uuid.UUID | None = None,
+    subsystem: str | None = None,
+) -> int:
+    stmt = _apply_filters(
+        select(ChangeRequest),
+        stage=stage,
+        risk_level=risk_level,
+        requester_id=requester_id,
+        subsystem=subsystem,
+    )
+    return db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+
 
 def list_change_requests(
     db: Session,
@@ -26,18 +66,18 @@ def list_change_requests(
     requester_id: uuid.UUID | None = None,
     subsystem: str | None = None,
     offset: int = 0,
-    limit: int = 20,
+    limit: int = DEFAULT_PAGE_SIZE,
 ) -> tuple[list[ChangeRequest], int]:
-    stmt = select(ChangeRequest)
-    if stage is not None:
-        stmt = stmt.where(ChangeRequest.current_stage == stage)
-    if risk_level is not None:
-        stmt = stmt.where(ChangeRequest.risk_level == risk_level)
-    if requester_id is not None:
-        stmt = stmt.where(ChangeRequest.requester_id == requester_id)
-    if subsystem is not None:
-        stmt = stmt.where(ChangeRequest.subsystem == subsystem)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    stmt = _apply_filters(
+        select(ChangeRequest),
+        stage=stage,
+        risk_level=risk_level,
+        requester_id=requester_id,
+        subsystem=subsystem,
+    )
+    total = count_change_requests(
+        db, stage=stage, risk_level=risk_level, requester_id=requester_id, subsystem=subsystem
+    )
     items = list(
         db.scalars(
             stmt.order_by(ChangeRequest.updated_at.desc(), ChangeRequest.id.desc())
@@ -46,6 +86,41 @@ def list_change_requests(
         )
     )
     return items, total
+
+
+def list_change_requests_cursor(
+    db: Session,
+    *,
+    stage: ChangeStage | None = None,
+    risk_level: RiskLevel | None = None,
+    subsystem: str | None = None,
+    first: int = DEFAULT_PAGE_SIZE,
+    after: tuple[datetime, uuid.UUID] | None = None,
+) -> tuple[list[ChangeRequest], bool]:
+    stmt = _apply_filters(
+        select(ChangeRequest), stage=stage, risk_level=risk_level, subsystem=subsystem
+    )
+    if after is not None:
+        after_updated_at, after_id = after
+        stmt = stmt.where(
+            or_(
+                ChangeRequest.updated_at < after_updated_at,
+                and_(
+                    ChangeRequest.updated_at == after_updated_at,
+                    ChangeRequest.id < after_id,
+                ),
+            )
+        )
+    page_size = min(max(first, 1), MAX_PAGE_SIZE)
+    rows = list(
+        db.scalars(
+            stmt.order_by(ChangeRequest.updated_at.desc(), ChangeRequest.id.desc()).limit(
+                page_size + 1
+            )
+        )
+    )
+    has_next_page = len(rows) > page_size
+    return rows[:page_size], has_next_page
 
 
 def get_change_request(

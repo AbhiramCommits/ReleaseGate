@@ -1,0 +1,24 @@
+mutation CreateChangeRequest($input: ChangeRequestInput!) {
+  createChangeRequest(input: $input) {
+    ...ChangeRequestSummary
+  }
+}
+
+mutation UpdateChangeRequest($id: ID!, $input: ChangeRequestUpdateInput!) {
+  updateChangeRequest(id: $id, input: $input) {
+    ...ChangeRequestSummary
+  }
+}
+
+mutation TransitionChangeRequest($id: ID!, $action: WorkflowAction!, $comment: String) {
+  transitionChangeRequest(id: $id, action: $action, comment: $comment) {
+    id
+    ticketKey
+    title
+    vehicleProgram
+    subsystem
+    riskLevel
+    currentStage
+    updatedAt
+  }
+}

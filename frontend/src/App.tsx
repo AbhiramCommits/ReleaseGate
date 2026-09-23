@@ -3,6 +3,7 @@ import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import LoginPage from "./pages/LoginPage";
 import RequestsPage from "./pages/RequestsPage";
+import RequestDetailPage from "./pages/RequestDetailPage";
 import NewRequestPage from "./pages/NewRequestPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 
@@ -14,6 +15,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/requests" replace />} />
           <Route path="/requests" element={<RequestsPage />} />
+          <Route path="/requests/:id" element={<RequestDetailPage />} />
           <Route path="/requests/new" element={<NewRequestPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
         </Route>
