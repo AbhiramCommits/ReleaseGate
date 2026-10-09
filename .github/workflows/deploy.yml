@@ -16,8 +16,13 @@ env:
   ECS_SERVICE: releasegate-service
 
 jobs:
+  # Deploy only once the AWS repository variables are configured. Without them
+  # every successful CI run on main triggered a deploy that failed at
+  # configure-aws-credentials ("Input required and not supplied: aws-region").
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      vars.AWS_REGION != '' && vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,3 +85,15 @@ jobs:
           done
           echo "Deployment health check failed after 5 minutes"
           exit 1
+
+  deploy-not-configured:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (vars.AWS_REGION == '' || vars.AWS_DEPLOY_ROLE_ARN == '' || vars.AWS_ACCOUNT_ID == '')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip deploy (AWS variables not configured)
+        run: >-
+          echo "::notice::Deploy skipped: set the AWS_REGION, AWS_DEPLOY_ROLE_ARN and
+          AWS_ACCOUNT_ID repository variables (Settings > Secrets and variables >
+          Actions > Variables) to enable ECS deploys."
